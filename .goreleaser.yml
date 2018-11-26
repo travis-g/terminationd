@@ -1,0 +1,24 @@
+
+builds:
+- goos:
+  - linux
+  - darwin
+  - windows
+  goarch:
+  - amd64
+  env:
+  - CGO_ENABLED=0
+  ldflags:
+    - -s -w
+
+release:
+  name_template: "v{{.Version}}"
+
+archive:
+  name_template: "{{.ProjectName}}_{{.Version}}_{{.Os}}_{{.Arch}}"
+  format: zip
+  files:
+  - none*
+
+checksum:
+  name_template: "{{.ProjectName}}_{{.Version}}_checksums.txt"

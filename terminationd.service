@@ -1,0 +1,6 @@
+[Unit]
+Description=Spot Instance Termination Early Warning
+After=network.target
+
+[Service]
+ExecStart=/home/ec2-user/go/bin/terminationd

@@ -9,7 +9,7 @@ builds:
   env:
   - CGO_ENABLED=0
   ldflags:
-    - -s -w
+  - -s -w
 
 release:
   name_template: "v{{.Version}}"
@@ -17,6 +17,10 @@ release:
 archive:
   name_template: "{{.ProjectName}}_{{.Version}}_{{.Os}}_{{.Arch}}"
   format: zip
+  # format: tar.gz
+  # format_overrides:
+  # - goos: windows
+  #   format: zip
   files:
   - none*
 

@@ -1,2 +1,4 @@
 terminationd
 dist*
+**.zip
+**.tar.gz

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -9,9 +10,9 @@ import (
 	"time"
 )
 
-// TerminationTimeURL is the AWS EC2 Instance meta-data URL for checking Spot
-// Instance termination times.
-const TerminationTimeURL = `http://169.254.169.254/latest/meta-data/spot/termination-time`
+// InstanceActionURL is the AWS EC2 Instance meta-data URL for checking Spot
+// Instance termination time.
+const InstanceActionURL = `http://169.254.169.254/latest/meta-data/spot/instance-action`
 
 var (
 	// Wait is the time (in seconds) between consecutive checks
@@ -21,31 +22,40 @@ var (
 	Client = &http.Client{
 		Timeout: time.Second * 3,
 	}
+
+	nilTime = (time.Time{}).UnixNano()
 )
 
-// IsTerminating returns true when querying the instance's termination time
-// returns a Time-like result, or false and any received errors if a Time-like
-// value was not returned.
-func IsTerminating() (bool, error) {
-	resp, err := Client.Get(TerminationTimeURL)
+// InstanceAction is the EC2 metadata response for Spot instance termination
+// actions. If a Spot Instance is not about to be terminated the response will
+// be an HTTP 404, and this object will consist of empty or zero-like values.
+type InstanceAction struct {
+	Action string    `json:"action"`
+	Time   time.Time `json:"time"`
+}
+
+// GetInstanceAction queries the requested URL for an EC2 instance-action
+// result.
+func GetInstanceAction(url string) (InstanceAction, error) {
+	instanceAction := &InstanceAction{}
+	resp, err := Client.Get(url)
 	if err != nil {
-		panic(err)
+		return *instanceAction, err
 	}
 	body, err := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
-		return false, err
+		return *instanceAction, err
 	}
 
-	t, err := time.Parse(time.RFC3339, string(body))
-	if err == nil {
-		// Successfully parsed a UTC time string:
-		log.Printf("Received termination notice for %v\n", t)
-		return true, nil
-	}
+	err = json.Unmarshal(body, instanceAction)
+	return *instanceAction, err
+}
 
-	// Response was unparsable as a time, but could be a full HTTP 404
-	return false, nil
+// IsTerminating returns true when the instance action's termination time
+// returns a non-default Time-like result.
+func (ia *InstanceAction) IsTerminating() bool {
+	return ia.Time.UnixNano() != nilTime
 }
 
 func main() {
@@ -54,17 +64,21 @@ func main() {
 	// tick asynchronously in case there is a timeout
 	ticker := time.NewTicker(Wait)
 	defer ticker.Stop()
+
 	go func() {
 		for range ticker.C {
-			terminating, err := IsTerminating()
+			ia, err := GetInstanceAction(InstanceActionURL)
 			if err != nil {
 				log.Println(err)
 			}
-			if terminating {
+			if ia.IsTerminating() {
+				log.Println(ia.Time, ia.Action)
 				signal.Notify(c)
 			}
 		}
 	}()
+
+	log.Println("Initialized")
 
 	s := <-c
 	log.Printf("%v received\n", s)
